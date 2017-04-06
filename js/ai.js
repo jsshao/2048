@@ -123,9 +123,22 @@ function heuristic(board) {
     if (board[0][0] == max || board[0][3] == max || board[3][0] == max || board[3][3] == max)
         corner = 1;
 
-    console.log(-(maxWeight*max + Math.log(empty)*emptyWeight - smoothness(board)*smoothWeight + monoWeight*monotonicity(board) + corner*max));
     return -(maxWeight*max + Math.log(empty)*emptyWeight - smoothness(board)*smoothWeight + monoWeight*monotonicity(board) + corner*max);
 }
+
+//function heuristic(board) {
+//    var count = 0;
+//    for (var i = 0; i < 4; i++) {
+//        for (var j = 0; j < 4; j++) {
+//            var k = 2;
+//            while (k <= board[i][j]) {
+//                count += k;
+//                k *= 2;
+//            }
+//        }
+//    }
+//    return -count;
+//}
 
 // Rotate the board counter-clockwise by k*pi/2
 function rotate(board, k) {
@@ -173,24 +186,24 @@ function moveLeft(inboard) {
 }
 
 // Returns (score, move)
-function miniMax(board, player, depth) {
+function expectedMiniMax(board, player, depth) {
     if (depth == 0) {
         return [heuristic(board), 0];
     } else if (player == "MAX") {
-        console.log("MAX");
         var bestHeuristic = 10000000;
         var bestDir = -1;
         for (var rot = 0; rot < 4; rot++) {
             var newBoard = (moveLeft(rotate(board, rot))); 
-            var val = miniMax(newBoard, "MIN", depth-1)[0];
-            if (val < bestHeuristic && JSON.stringify(rotate(board, rot)) != JSON.stringify(moveLeft(rotate(board, rot)))) {
-                bestHeuristic = val;
-                bestDir = rot;
+            var val = expectedMiniMax(newBoard, "MIN", depth-1)[0];
+            if (JSON.stringify(rotate(board, rot)) != JSON.stringify(moveLeft(rotate(board, rot)))) {
+                if (bestDir == -1 || val < bestHeuristic) {
+                    bestHeuristic = val;
+                    bestDir = rot;
+                }
             }
         }
         return [bestHeuristic, bestDir];
     } else if (player == "MIN") {
-        console.log("MIN");
         var totalHeuristic = 0;
         var numMoves = 0;
         for (var i = 0; i < 4; i++) {
@@ -200,14 +213,55 @@ function miniMax(board, player, depth) {
                     if (board[i][j] == 0) {
                         var newBoard = (board);
                         newBoard[i][j] = randomValue;
-                        var val = miniMax(newBoard, "MAX", depth-1)[0];
+                        var val = expectedMiniMax(newBoard, "MAX", depth-1)[0];
                         totalHeuristic += val * (0.9 ? k == 1 : 0.1);
                         numMoves += (0.9 ? k == 1 : 0.1);
                     }
                 }
             }
         }
+        if (numMoves == 0)
+            return [10000000, 0]
         return [totalHeuristic / numMoves, 0];
+    }
+}
+
+function miniMax(board, player, depth) {
+    if (depth == 0) {
+        return [heuristic(board), 0];
+    } else if (player == "MAX") {
+        var bestHeuristic = 10000000;
+        var bestDir = -1;
+        for (var rot = 0; rot < 4; rot++) {
+            var newBoard = (moveLeft(rotate(board, rot))); 
+            var val = miniMax(newBoard, "MIN", depth-1)[0];
+            if (JSON.stringify(rotate(board, rot)) != JSON.stringify(moveLeft(rotate(board, rot)))) {
+                if (bestDir == -1 || val < bestHeuristic) {
+                    bestHeuristic = val;
+                    bestDir = rot;
+                }
+            }
+        }
+        return [bestHeuristic, bestDir];
+    } else if (player == "MIN") {
+        var worstHeuristic = -10000000;
+        for (var i = 0; i < 4; i++) {
+            for (var j = 0; j < 4; j++) {
+                for (var k = 1; k < 3; k++) {
+                    var randomValue = k*2;
+                    if (board[i][j] == 0) {
+                        var newBoard = (board);
+                        newBoard[i][j] = randomValue;
+                        var val = miniMax(newBoard, "MAX", depth-1)[0];
+                        if (val > worstHeuristic) {
+                            worstHeuristic = val;
+                        }
+                        newBoard[i][j] = 0;
+                    }
+                }
+            }
+        }
+        return [worstHeuristic, 0];
     }
 }
 
@@ -231,22 +285,21 @@ function fireKey(key)
 document.getElementById("solve").addEventListener("click", function() {
     var gameOver = document.getElementsByClassName("retry-button")[0];
     var lastMove = null;
-    var move = miniMax(getBoard(), "MAX", 2)[1];
-    console.log(move);
+    var move = expectedMiniMax(getBoard(), "MAX", 2)[1];
     var repeat = setInterval(function() {
-        /*
-        var bestHeuristic = 1000000;
-        var bestDir = 0;
-        for (var rot = 0; rot < 4; rot++) {
-            var val = heuristic2(moveLeft(rotate(getBoard(), rot))); 
-            if (val < bestHeuristic && JSON.stringify(rotate(getBoard(), rot)) != JSON.stringify(moveLeft(rotate(getBoard(), rot)))) {
-                bestHeuristic = val;
-                bestDir = rot;
-            }
+        var move = expectedMiniMax(getBoard(), "MAX", 5)[1];
+        fireKey(37 + move);
+        if (!(gameOver.offsetParent === null)) {
+            clearInterval(repeat);
         }
-        lastMove = bestDir;
-        fireKey(37 + bestDir);
-        */
+    }, 100); 
+});
+
+document.getElementById("naive-solve").addEventListener("click", function() {
+    var gameOver = document.getElementsByClassName("retry-button")[0];
+    var lastMove = null;
+    var move = miniMax(getBoard(), "MAX", 2)[1];
+    var repeat = setInterval(function() {
         var move = miniMax(getBoard(), "MAX", 5)[1];
         fireKey(37 + move);
         if (!(gameOver.offsetParent === null)) {
